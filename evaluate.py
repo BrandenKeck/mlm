@@ -1,74 +1,115 @@
 # Imports
 import torch
 import pandas as pd
-from mlm import MaskedLanguageModel
+from mlm import RotaryMLM
 
 
 # Hyperparameters
-DEVICE = "cuda"         # Device - GPU
-DIM = 1024               # Model Dimension (Embedding Size)
+DATASET = "pdb"
+DEVICE = "cpu"         # Device - GPU
+DIM = 512               # Model Dimension (Embedding Size)
 NHEAD = 8               # Number of Multi-head Attention Heads
 NLAYER = 8              # Number of Transformer Encoders in the Stack
-DIMFF = 512            # Dimensions of the Transformer Encoder Linear Layers
+DIMFF = 1024            # Dimensions of the Transformer Encoder Linear Layers
 DIMSUB = 256             # Dimension of Intermediate output layer in FF Network
-DROPOUT = 0.            # Model Dropout Value
-MASKPROB = 0.01         # Probability of [MASK]-ing a token
+DROPOUT = 0.1            # Model Dropout Value
+MASKPROB = 0.005         # Probability of [MASK]-ing a token
+MAXSEQ = 512              # RoPE Positional Encoding Hyperparameter
+VOCABSIZE = 25
 
 
 # Setup Models and Datasets
-model = MaskedLanguageModel(
-    dim=DIM, 
-    vocab_size=29, 
-    padding_idx=0, 
-    n_heads=NHEAD, 
-    n_layers=NLAYER,
-    dim_feedforward=DIMFF,
-    dim_sublayer=DIMSUB,
-    dropout=DROPOUT,
-    mask_prob=MASKPROB,
-    mask_token_id=4,
-    pad_token_id=0,
-    mask_ignore_token_ids = [1, 2, 3]
+model = RotaryMLM(
+    vocab_size = VOCABSIZE,
+    d_model = DIM,
+    nheads = NHEAD,
+    nlayers = NLAYER,
+    dim_feedforward = DIMFF,
+    dropout_prob = DROPOUT,
+    max_seq_len = MAXSEQ,
+    dim_sublayer = DIMSUB,
+    mask_prob = MASKPROB,
+    mask_token_id = 21,
+    pad_token_id = 0
 ).to(DEVICE)
-model.load_state_dict(torch.load(f"./model/proteinas.h5"))
+model.load_state_dict(torch.load(f"./model/rotary_{DATASET}.h5"))
+model.eval()
 
-
-# ProtBERT Standard Tokenization Dictionary
+# Tokenization Dictionary
 token_dict = {
-    "[PAD]": 0, "[UNK]": 1, "[CLS]": 2,
-    "[SEP]": 3, "[MASK]": 4,
-    "A":6, "B":27, "C":23, "D":14, "E":9, "F":19,
-    "G":7, "H":22, "I":11, "J":1, "K":12, "L":5,
-    "M":21, "N":17, "O":29, "P":16, "Q":18, "R":13,
-    "S":10, "T":15, "U":26, "V":8, "W":24, "X":25,
-    "Y":20, "Z":28
+    "[PAD]": 0,
+    "A": 1, # alanine
+    "R": 2, # arginine
+    "N": 3, # asparagine
+    "D": 4, # aspartic acid
+    "C": 5, # cysteine
+    "E": 6, # glutamic acid
+    "Q": 7, # glutamine
+    "G": 8, # glycine
+    "H": 9, # histidine
+    "I": 10, # isoleucine
+    "L": 11, # leucine
+    "K": 12, # lysine
+    "M": 13, # methionine
+    "F": 14, # phenylalanine
+    "P": 15, # proline
+    "O": 16, # pyrrolysine
+    "U": 17, # selenocysteine
+    "S": 18, # serine
+    "T": 19, # threonine
+    "W": 20, # tryptophan
+    "Y": 21, # tyrosine
+    "V": 22, # valine
+    "B": 23, # unknown
+    "J": 23, # unknown
+    "X": 23, # unknown
+    "Z": 23, # unknown
+    "[MASK]": 24,
 }
-acid_list = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]",
-        "L", "A", "G", "V", "E", "S", "I", "K", "R",
-        "D", "T", "P", "N", "Q", "F", "Y", "M", "H", "C",
-        "W", "X", "U", "B", "Z", "O"]
+acid_list = [
+    "[PAD]",
+    "A","R","N","D",
+    "C","E","Q","G",
+    "H","I","L","K","M","F",
+    "P","O","U","S","T","W","Y",
+    "V","[UNK]","[MASK]"
+]
 
 
 # Tokenization of Amino Acid Sequence
-def tokenize(X: str, max_len: int = 300) -> list:
+def tokenize(X: str, max_len: int = 512) -> list:
+    x_list = list(X)
     seq_len = len(X)
     padding = (max_len-seq_len) * ["[PAD]"]
-    X = [token_dict[x] for x in list(X) + padding]
-    return X
+    tokens = [token_dict[x] for x in x_list + padding]
+    return tokens
 
 
 # Get data
-data = pd.read_csv("./data/proteinas_test.csv")
-X = list(data["Sequência"])
-X = [x for x in X if len(x) > 200] # Limit data size
-X = torch.tensor([tokenize(x) for x in X])
-# Y = torch.tensor(data["Hidrofobicidade"])
+data = pd.read_csv(f"./data/{DATASET}.csv")
+X = list(data["sequence"])
+X = torch.tensor([tokenize(x, MAXSEQ) for x in X])
 
 
-out = model(X[:1].to(DEVICE))
-out.shape
-out
+# out = model(X[:1].to(DEVICE))
+# out.shape
+# print(out)
 
-xx = torch.argmax(out, dim=2).cpu().numpy()[0]
-decoded = [acid_list[x] for x in list(xx)]
-decoded
+# xx = torch.argmax(out, dim=2).cpu().numpy()[0]
+# decoded = [acid_list[x] for x in list(xx)]
+# print(decoded)
+
+print(token_dict["R"])
+xx = X[:1]
+xx[0][4] = 24
+out = model(xx.to(DEVICE))
+print(out[0, 4, :])
+
+import numpy as np
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+dist = out[0, 4, :].detach().cpu().numpy()
+ax.bar([acid_list[ii] for ii in range(25)], list(dist))
+ax.set_xticklabels([acid_list[ii] for ii in range(25)], rotation=90)
+plt.savefig("dist_test.png")
+plt.close()

@@ -2,8 +2,8 @@
 import torch
 import pandas as pd
 import torch.nn as nn
+from mlm import RotaryMLM
 import torch.nn.functional as F
-from mlm import MaskedLanguageModel
 from torch.utils.data import TensorDataset, DataLoader
 
 
@@ -11,7 +11,7 @@ from torch.utils.data import TensorDataset, DataLoader
 DATASET = "pdb"
 DEVICE = "cuda"         # Device - GPU
 BATCH_SIZE = 4         # Data Batch Size During Training
-EPOCHS = 100          # Number of Training Epochs
+EPOCHS = 100            # Number of Training Epochs
 LEARNING_RATE = 9E-6    # Initial Learning Rate
 LR_GAMMA = 0.999         # Learning Rate Decay
 DIM = 512               # Model Dimension (Embedding Size)
@@ -73,19 +73,20 @@ X = torch.tensor([tokenize(x, MAXSEQ) for x in X])
 
 
 # Setup Models and Datasets
-model = MaskedLanguageModel(
-    dim=DIM, 
-    vocab_size=VOCABSIZE, 
-    n_heads=NHEAD, 
-    n_layers=NLAYER,
-    dim_feedforward=DIMFF,
-    dim_sublayer=DIMSUB,
-    dropout=DROPOUT,
-    mask_prob=MASKPROB,
-    mask_token_id=24,
-    pad_token_id=0,
+model = RotaryMLM(
+    vocab_size = VOCABSIZE,
+    d_model = DIM,
+    nheads = NHEAD,
+    nlayers = NLAYER,
+    dim_feedforward = DIMFF,
+    dropout_prob = DROPOUT,
+    max_seq_len = MAXSEQ,
+    dim_sublayer = DIMSUB,
+    mask_prob = MASKPROB,
+    mask_token_id = 24,
+    pad_token_id = 0
 ).to(DEVICE)
-# model.load_state_dict(torch.load(f"./model/{DATASET}.h5"))
+# model.load_state_dict(torch.load(f"./model/rotary_{DATASET}.h5"))
 train_dataset = TensorDataset(torch.Tensor(X).to(DEVICE))
 train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
 
@@ -114,6 +115,6 @@ for epoch in range(EPOCHS):
     loss_profile.append(train_loss)
     print(f"Epoch {epoch+1} - LR: {scheduler.get_lr()} | Loss: {train_loss}")
     scheduler.step()
-    torch.save(model.state_dict(), f"./model/{DATASET}.h5")
+    torch.save(model.state_dict(), f"./model/rotary_{DATASET}.h5")
 
-pd.DataFrame({"loss":loss_profile}).to_csv(f"{DATASET}_loss.csv")
+pd.DataFrame({"loss":loss_profile}).to_csv(f"{DATASET}_rotary_loss.csv")

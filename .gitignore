@@ -1,2 +1,10 @@
 model
+.*
+.ssh
+.idea
+.local
+.vscode
+.ipython
+.jupyter
+.oh-my-zsh
 .lightning_studio
