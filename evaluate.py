@@ -113,3 +113,24 @@ ax.bar([acid_list[ii] for ii in range(25)], list(dist))
 ax.set_xticklabels([acid_list[ii] for ii in range(25)], rotation=90)
 plt.savefig("dist_test.png")
 plt.close()
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+pdb_125 = list(pd.read_csv("pdb_loss_1.2e-5.csv")["loss"])
+pdbr_125 = list(pd.read_csv("pdb_rotary_loss_1.2e-5.csv")["loss"])
+pdb_84 = list(pd.read_csv("pdb_loss_8e-4.csv")["loss"])
+pdbr_84 = list(pd.read_csv("pdb_rotary_loss_8e-4.csv")["loss"])
+loss_data = pd.DataFrame({
+    "Epoch": range(2, len(pdb_125)),
+    "T1 Loss": pdb_125[2:],
+    "T2 Loss": pdb_84[2:],
+    "R1 Loss": pdbr_125[2:],
+    "R2 Loss": pdbr_84[2:]
+})
+loss_data.plot(x="Epoch", y=["T1 Loss", "T2 Loss", "R1 Loss", "R2 Loss"],
+                xlabel="Epoch",
+                ylabel="Loss"
+                )
+plt.savefig("losses.png")
+plt.close()
